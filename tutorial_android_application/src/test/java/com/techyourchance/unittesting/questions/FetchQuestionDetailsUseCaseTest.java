@@ -1,5 +1,6 @@
 package com.techyourchance.unittesting.questions;
 
+import com.techyourchance.unittesting.common.time.TimeProvider;
 import com.techyourchance.unittesting.networking.questions.FetchQuestionDetailsEndpoint;
 import com.techyourchance.unittesting.networking.questions.QuestionSchema;
 
@@ -20,14 +21,17 @@ import static org.junit.Assert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class FetchQuestionDetailsUseCaseTest {
 
     private static final String QUESTION_ID_1 = "questionId_1";
     private static final String QUESTION_ID_2 = "questionId_2";
+    private static final long CACHE_TIMEOUT = 60000;
     private static final String TITLE_1 = "title_1";
     private static final String TITLE_2 = "title_2";
     private static final String BODY_1 = "body_1";
@@ -46,13 +50,15 @@ public class FetchQuestionDetailsUseCaseTest {
     @Mock
     FetchQuestionDetailsEndpoint mFetchQuestionDetailsEndpointMock;
     @Mock
+    TimeProvider mTimeProvider;
+    @Mock
     FetchQuestionDetailsUseCase.Listener mListener1;
     @Mock
     FetchQuestionDetailsUseCase.Listener mListener2;
 
     @Before
     public void setUp() throws Exception {
-        SUT = new FetchQuestionDetailsUseCase(mFetchQuestionDetailsEndpointMock);
+        SUT = new FetchQuestionDetailsUseCase(mFetchQuestionDetailsEndpointMock, mTimeProvider);
         SUT.registerListener(mListener1);
         SUT.registerListener(mListener2);
         success();
@@ -93,7 +99,7 @@ public class FetchQuestionDetailsUseCaseTest {
         verify(mListener1).onQuestionDetailsFetchFailed();
         verify(mListener2).onQuestionDetailsFetchFailed();
     }
-    /*
+
     @Test
     public void fetchQuestionDetail_secondTimeImmediatelyAfterSuccess_listenersNotifiedWithDataFromCache() {
 
@@ -103,10 +109,55 @@ public class FetchQuestionDetailsUseCaseTest {
         verify(mListener1, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
         verify(mListener2, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
         checkQuestionDetails(mQuestionDetailsCaptor.getAllValues(), questionDetails1);
-        verify(mListener1,times(1)).onQuestionDetailsFetched(any(QuestionDetails.class));
-        verify(mListener2,times(1)).onQuestionDetailsFetched(any(QuestionDetails.class));
+        verify(mFetchQuestionDetailsEndpointMock,times(1))
+                .fetchQuestionDetails(anyString(), any(FetchQuestionDetailsEndpoint.Listener.class));
     }
-     */
+
+    @Test
+    public void fetchQuestionDetail_secondTimeBeforeTimeOutAfterSuccess_listenersNotifiedWithDataFromCache() {
+
+        setTimeOut(0L);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID_1);
+
+        setTimeOut(CACHE_TIMEOUT - 1);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID_1);
+
+        verify(mListener1, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
+        verify(mListener2, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
+        checkQuestionDetails(mQuestionDetailsCaptor.getAllValues(), questionDetails1);
+        verify(mFetchQuestionDetailsEndpointMock,times(1))
+                .fetchQuestionDetails(anyString(), any(FetchQuestionDetailsEndpoint.Listener.class));
+    }
+
+    @Test
+    public void fetchQuestionDetails_secondTimeAfterTimeOutAfterSuccess_listenerNotifiedWithDataNotFromCache() {
+        setTimeOut(0L);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID_1);
+
+        setTimeOut(CACHE_TIMEOUT);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID_1);
+
+        verify(mListener1, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
+        verify(mListener2, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
+        checkQuestionDetails(mQuestionDetailsCaptor.getAllValues(), questionDetails1);
+        verify(mFetchQuestionDetailsEndpointMock,times(2))
+                .fetchQuestionDetails(anyString(), any(FetchQuestionDetailsEndpoint.Listener.class));
+
+    }
+
+    @Test
+    public void fetchQuestionDetail_secondTimeWithDifferentQuestionIdAfterSuccess_listenersNotifiedWithDataFromCache() {
+
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID_1);
+        SUT.fetchQuestionDetailsAndNotify(QUESTION_ID_2);
+
+        verify(mListener1, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
+        verify(mListener2, times(2)).onQuestionDetailsFetched(mQuestionDetailsCaptor.capture());
+        assertThat(mQuestionDetailsCaptor.getAllValues().contains(questionDetails1), is(true));
+        assertThat(mQuestionDetailsCaptor.getAllValues().contains(questionDetails2), is(true));
+        verify(mFetchQuestionDetailsEndpointMock,times(2))
+                .fetchQuestionDetails(anyString(), any(FetchQuestionDetailsEndpoint.Listener.class));
+    }
 
     private void success() {
         doAnswer(new Answer() {
@@ -141,6 +192,11 @@ public class FetchQuestionDetailsUseCaseTest {
         for (QuestionDetails mQuestionDetails : questionDetailsList){
             assertThat(mQuestionDetails, is(questionDetails));
         }
+    }
+
+
+    private void setTimeOut(Long timeOut) {
+        when(mTimeProvider.getCurrentTimestamp()).thenReturn(timeOut);
     }
 
 
