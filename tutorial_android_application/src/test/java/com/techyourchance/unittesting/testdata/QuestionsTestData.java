@@ -1,14 +1,20 @@
 package com.techyourchance.unittesting.testdata;
 
+import com.techyourchance.unittesting.networking.questions.QuestionSchema;
 import com.techyourchance.unittesting.questions.Question;
+import com.techyourchance.unittesting.questions.QuestionDetails;
 
 import java.util.LinkedList;
 import java.util.List;
 
 public class QuestionsTestData {
 
+    private static final String ID = "id";
+    private static final String TITLE = "title";
+    private static final String BODY = "body";
+
     public static Question getQuestion() {
-        return new Question("id", "title");
+        return new Question(ID, TITLE);
     }
 
     public static List<Question> getQuestions() {
@@ -16,5 +22,9 @@ public class QuestionsTestData {
         questions.add(new Question("id1", "title1"));
         questions.add(new Question("id2", "title2"));
         return questions;
+    }
+
+    public static QuestionDetails getQuestionsDetails(){
+        return new QuestionDetails(ID, TITLE, BODY);
     }
 }
